@@ -1,15 +1,163 @@
+#![allow(unused_attributes)]
+#![allow(unused_imports)]
+
+mod string_enum;
+
+
 use anyhow::{Context, Result};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use serde::{Deserialize, Serialize};
+use crate::string_enum::string_enum;
+
+string_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum Model {
+        Gpt4o => "gpt-4o-mini",
+        Gpt5  => "gpt-5",
+        Gpt5Mini  => "gpt-5-mini",
+    }
+}
+
+
+
+
+
+
+
+struct Answer {
+    response: Response,
+    json: Value,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum ContentPart {
+    #[serde(rename = "output_text")]
+    OutputText { text: String },
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum OutputItem {
+    #[serde(rename = "message")]
+    Message {
+        #[serde(default)]
+        content: Vec<ContentPart>
+    },
+    #[serde(other)] // ignore "reasoning" or anything else
+    Other,
+}
+
+
+#[derive(Deserialize)]
+struct Response {
+    #[serde(default)]
+    output: Vec<OutputItem>,
+
+
+    //output_text: Option<String>, // sometimes provided by API
+}
+
+impl Response {
+    fn first_output_text_typed(&self) -> Option<&str> {
+    for item in &self.output {
+        if let OutputItem::Message { content } = item {
+            for part in content {
+                if let ContentPart::OutputText { text } = part {
+                    return Some(text.as_str());
+                }
+            }
+        }
+    }
+    None
+}
+}
+
+
+impl Answer {
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        Ok(Self {
+            json: serde_json::from_slice(&bytes).context("JSON parse failed")?,
+            response: serde_json::from_slice(&bytes)?,
+        })
+    }
+
+    fn to_string(&self) -> Option<String> {
+        self.response.first_output_text_typed().map(|s| s.to_string())
+    }
+
+    fn dump(&self) {
+        if let Ok(s) = serde_json::to_string_pretty(&self.json) {
+            println!("{}", s);
+        }
+    }
+}
+
+
+
+
+
 
 
 struct GptClient {
     client: reqwest::Client,
     key: Option<String>,
+
 }
+
+string_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum Verbosity {
+        Low => "low",
+        Medium => "medium",
+        High => "high",
+    }
+}
+
+struct QuestionParams {
+    verbosity: Verbosity,
+    model: Model,
+    instructions: Option<String>,
+}
+
+impl QuestionParams {
+    pub fn default() -> Self {
+        Self {
+            verbosity: Verbosity::Medium,
+            model: Model::Gpt5Mini,
+            instructions: None,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn set_model(&mut self, model: Model) {
+        self.model = model;
+    }
+
+    pub fn set_instructions<S: AsRef<str>>(&mut self, instructions: S) {
+        let s = instructions.as_ref().trim();
+        if s.len() <= 1 { return };
+        self.instructions = Some(s.to_owned());
+    }
+}
+
+
+#[derive(Serialize)]
+struct RequestBody<'a> {
+    model: String,
+    input: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    instructions: Option<&'a str>,
+    text: serde_json::Value,
+}
+
 
 impl GptClient {
     fn new() -> Self {
@@ -18,7 +166,6 @@ impl GptClient {
             key: None,
         }
     }
-
 
     fn get_key(&self) -> anyhow::Result<&str> {
         self.key
@@ -48,6 +195,37 @@ impl GptClient {
         self.key = Some(key.clone());
         Ok(())
     }
+
+
+    async fn ask(&self, question: &str, params: &QuestionParams) -> Result<Answer> {
+        let body = RequestBody {
+            model: params.model.to_string(),
+            input: question,
+            instructions: params.instructions.as_deref(),
+            text: json!({ "verbosity": params.verbosity.to_string() }),
+        };
+
+        let body = serde_json::to_value(&body)?;
+
+        let resp = self.client
+            .post("https://api.openai.com/v1/responses")
+            .header(CONTENT_TYPE, "application/json")
+            .header(AUTHORIZATION, format!("Bearer {}", self.get_key()?))
+            .json(&body)
+            .send()
+            .await
+            .context("HTTP request failed")?;
+
+        let status = resp.status();
+        let bytes = resp.bytes().await.context("reading body failed")?;
+
+        if !status.is_success() {
+            let text = String::from_utf8_lossy(&bytes);
+            anyhow::bail!("OpenAI error {}: {}", status, text);
+        }
+
+        Ok(Answer::from_bytes(&bytes)?)
+    }
 }
 
 
@@ -55,51 +233,16 @@ impl GptClient {
 async fn main() -> Result<()> {
 
     let mut cli = GptClient::new();
+    let mut params = QuestionParams::default();
+    params.set_instructions("Short minimalistic answer to the question. 1–2 words unless the correct name naturally requires more. No punctuation, no extra explanation.");
+
+
     cli.read_gpt_key_from_file(None)?;
+    //let answer = cli.ask("Where is Prague located?", &params).await?;
+    let answer = cli.ask("In order to play the game 'guess the animal', Choose the animal by random you are going to be and tell me the animal.", &params).await?;
+    let res = answer.to_string().unwrap_or(String::new());
+    println!("{}", res);
 
-
-
-    let home_path = env::var("HOME").expect("HOME env var not set");
-    let key_path = PathBuf::from(home_path).join(".gpt.key");
-    let key = fs::read_to_string(&key_path)
-        .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", key_path, e))
-        .trim()
-        .to_string();
-
-    let body = serde_json::json!({
-        "model": "gpt-4o-mini",
-        "input": "how are you?"
-    });
-
-    let client = reqwest::Client::new();
-    let resp = client
-        .post("https://api.openai.com/v1/responses")
-        .header(CONTENT_TYPE, "application/json")
-        .header(AUTHORIZATION, format!("Bearer {}", key))
-        .json(&body)
-        .send()
-        .await
-        .context("HTTP request failed")?;
-
-    // 👇 borrow-of-moved-value fix: copy status *before* consuming the body
-    let status = resp.status();
-    let bytes = resp.bytes().await.context("reading body failed")?;
-
-    if !status.is_success() {
-        // Body was already read; use it here.
-        let text = String::from_utf8_lossy(&bytes);
-        anyhow::bail!("OpenAI error {}: {}", status, text);
-    }
-
-    // Parse once; extract output_text if present, else dump the JSON.
-    let v: Value = serde_json::from_slice(&bytes).context("JSON parse failed")?;
-    if let Some(text) = v.get("output_text").and_then(|x| x.as_str()) {
-        println!("{}", text.trim());
-    } else {
-        println!("{}", serde_json::to_string_pretty(&v)?);
-    }
-
-
-
+    //answer.dump();
     Ok(())
 }
