@@ -1,8 +1,9 @@
 #![allow(unused_attributes)]
 #![allow(unused_imports)]
+#![allow(dead_code)]
 
 mod string_enum;
-
+mod server;
 
 use anyhow::{Context, Result};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
@@ -13,6 +14,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use crate::string_enum::string_enum;
 
+
 string_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum Model {
@@ -22,7 +24,6 @@ string_enum! {
         Gpt5Nano => "gpt-5-nano",
     }
 }
-
 
 struct Answer {
     response: Response,
@@ -231,7 +232,7 @@ impl GptClient {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-
+/*
     let mut cli = GptClient::new();
     let mut params = QuestionParams::default();
     params.set_instructions("Short minimalistic answer to the question. 1–2 words unless the correct name naturally requires more. No punctuation, no extra explanation.");
@@ -244,5 +245,8 @@ async fn main() -> Result<()> {
     println!("{}", res);
 
     answer.dump();
+
+ */
+    server::run_server(8080).await?;
     Ok(())
 }
