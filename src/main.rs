@@ -18,7 +18,8 @@ string_enum! {
     pub enum Model {
         Gpt4o => "gpt-4o-mini",
         Gpt5  => "gpt-5",
-        Gpt5Mini  => "gpt-5-mini",
+        Gpt5Mini => "gpt-5-mini",
+        Gpt5Nano => "gpt-5-nano",
     }
 }
 
@@ -122,7 +123,7 @@ impl QuestionParams {
     pub fn default() -> Self {
         Self {
             verbosity: Verbosity::Medium,
-            model: Model::Gpt5Mini,
+            model: Model::Gpt5Nano,
             instructions: None,
             max_output_tokens: None,
         }
