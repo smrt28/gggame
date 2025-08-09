@@ -23,11 +23,6 @@ string_enum! {
 }
 
 
-
-
-
-
-
 struct Answer {
     response: Response,
     json: Value,
@@ -81,7 +76,6 @@ impl Response {
 
 
 impl Answer {
-
     fn from_bytes(bytes: &[u8]) -> Result<Self> {
         Ok(Self {
             json: serde_json::from_slice(&bytes).context("JSON parse failed")?,
@@ -99,10 +93,6 @@ impl Answer {
         }
     }
 }
-
-
-
-
 
 
 
@@ -125,6 +115,7 @@ struct QuestionParams {
     verbosity: Verbosity,
     model: Model,
     instructions: Option<String>,
+    max_output_tokens: Option<i32>,
 }
 
 impl QuestionParams {
@@ -133,6 +124,7 @@ impl QuestionParams {
             verbosity: Verbosity::Medium,
             model: Model::Gpt5Mini,
             instructions: None,
+            max_output_tokens: None,
         }
     }
 
@@ -141,13 +133,18 @@ impl QuestionParams {
         self.model = model;
     }
 
+    #[allow(dead_code)]
     pub fn set_instructions<S: AsRef<str>>(&mut self, instructions: S) {
         let s = instructions.as_ref().trim();
         if s.len() <= 1 { return };
         self.instructions = Some(s.to_owned());
     }
-}
 
+    #[allow(dead_code)]
+    pub fn set_max_output_tokens(&mut self, max_output_tokens: i32) {
+        self.max_output_tokens = Some(max_output_tokens);
+    }
+}
 
 #[derive(Serialize)]
 struct RequestBody<'a> {
@@ -156,6 +153,7 @@ struct RequestBody<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     instructions: Option<&'a str>,
     text: serde_json::Value,
+    max_output_tokens: Option<i32>
 }
 
 
@@ -202,6 +200,7 @@ impl GptClient {
             model: params.model.to_string(),
             input: question,
             instructions: params.instructions.as_deref(),
+            max_output_tokens: params.max_output_tokens,
             text: json!({ "verbosity": params.verbosity.to_string() }),
         };
 
@@ -243,6 +242,6 @@ async fn main() -> Result<()> {
     let res = answer.to_string().unwrap_or(String::new());
     println!("{}", res);
 
-    //answer.dump();
+    answer.dump();
     Ok(())
 }
