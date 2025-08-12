@@ -1,7 +1,8 @@
+
+
 #![allow(unused_attributes)]
 #![allow(unused_imports)]
 #![allow(dead_code)]
-
 
 
 use anyhow::{Context, Result};
@@ -12,7 +13,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
-use crate::string_enum::string_enum;
+use crate::string_enum;
 
 
 string_enum! {
@@ -25,14 +26,14 @@ string_enum! {
     }
 }
 
-struct Answer {
+pub struct Answer {
     response: Response,
     json: Value,
 }
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
-enum ContentPart {
+pub enum ContentPart {
     #[serde(rename = "output_text")]
     OutputText { text: String },
     #[serde(other)]
@@ -41,7 +42,7 @@ enum ContentPart {
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
-enum OutputItem {
+pub enum OutputItem {
     #[serde(rename = "message")]
     Message {
         #[serde(default)]
@@ -53,7 +54,7 @@ enum OutputItem {
 
 
 #[derive(Deserialize)]
-struct Response {
+pub struct Response {
     #[serde(default)]
     output: Vec<OutputItem>,
 
@@ -78,18 +79,18 @@ impl Response {
 
 
 impl Answer {
-    fn from_bytes(bytes: &[u8]) -> Result<Self> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         Ok(Self {
             json: serde_json::from_slice(&bytes).context("JSON parse failed")?,
             response: serde_json::from_slice(&bytes)?,
         })
     }
 
-    fn to_string(&self) -> Option<String> {
+    pub fn to_string(&self) -> Option<String> {
         self.response.first_output_text_typed().map(|s| s.to_string())
     }
 
-    fn dump(&self) {
+    pub fn dump(&self) {
         if let Ok(s) = serde_json::to_string_pretty(&self.json) {
             println!("{}", s);
         }
@@ -98,10 +99,9 @@ impl Answer {
 
 
 
-struct GptClient {
+pub struct GptClient {
     client: reqwest::Client,
     key: Option<String>,
-
 }
 
 string_enum! {
@@ -113,7 +113,7 @@ string_enum! {
     }
 }
 
-struct QuestionParams {
+pub struct QuestionParams {
     verbosity: Verbosity,
     model: Model,
     instructions: Option<String>,
@@ -174,7 +174,7 @@ struct RequestBody<'a> {
             .ok_or_else(|| anyhow::anyhow!("key not set"))
     }
 
-    fn read_gpt_key_from_file(&mut self, path_opt: Option<String>) -> Result<()> {
+    pub fn read_gpt_key_from_file(&mut self, path_opt: Option<String>) -> Result<()> {
         let path: PathBuf = match path_opt {
             Some(p) => PathBuf::from(p),
             None => {
@@ -197,7 +197,7 @@ struct RequestBody<'a> {
     }
 
 
-    async fn ask(&self, question: &str, params: &QuestionParams) -> Result<Answer> {
+    pub async fn ask(&self, question: &str, params: &QuestionParams) -> Result<Answer> {
         let body = RequestBody {
             model: params.model.to_string(),
             input: question,

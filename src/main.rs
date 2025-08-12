@@ -1,21 +1,21 @@
 
 #[macro_use]
-mod string_enum;
-mod gpt;
+
 mod server;
+mod gpt;
+
 
 use anyhow::{Context, Result};
-
 use crate::server::run_server;
+use crate::gpt::*;
 
-
-
-
+#[macro_use]
+mod macros;
 
 #[tokio::main]
 async fn main() -> Result<()> {
 /*
-    let mut cli = GptClient::new();
+
     let mut params = QuestionParams::default();
     params.set_instructions("Short minimalistic answer to the question. 1–2 words unless the correct name naturally requires more. No punctuation, no extra explanation.");
 
@@ -29,7 +29,17 @@ async fn main() -> Result<()> {
     answer.dump();
 
  */
-    run_server().await?;
+
+    let mut cli = GptClient::new();
+    cli.read_gpt_key_from_file(None)?;
+
+    let mut params = gpt::QuestionParams::default();
+    params.set_instructions("Short minimalistic answer to the question. 1–2 words unless the correct name naturally requires more. No punctuation, no extra explanation.");
+    let answer = cli.ask("Name a random well known actor.", &params).await?;
+    let res = answer.to_string().unwrap_or(String::new());
+    println!("{}", res);
+
+   // run_server().await?;
 
     Ok(())
 }
