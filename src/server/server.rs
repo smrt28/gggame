@@ -1,4 +1,4 @@
-use axum::{extract::ConnectInfo, routing::get, Router, response::Redirect, extract::State};
+use axum::{extract::ConnectInfo, routing::get, Router, extract::State};
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -14,7 +14,7 @@ struct AppState {
 type Shared = Arc<AppState>;
 
 pub async fn run_server() -> anyhow::Result<()> {
-    let state = Arc::new(AppState::default());
+    let state = Shared::new(AppState::default());
 
     let app = Router::new()
         .route("/", get(index))
@@ -36,14 +36,14 @@ pub async fn run_server() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn gggame(ConnectInfo(addr): ConnectInfo<SocketAddr>) -> String {
+async fn gggame(ConnectInfo(_addr): ConnectInfo<SocketAddr>) -> String {
     format!("this is a gggame")
 }
 
 async fn index(
     State(state): State<Shared>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Html<String> {
-
+    #[allow(unused_assignments)]
     let mut counter_value = 0;
 
     {

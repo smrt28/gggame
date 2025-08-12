@@ -19,7 +19,7 @@ use crate::string_enum;
 string_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum Model {
-        Gpt4o => "gpt-4o-mini",
+        //Gpt4o => "gpt-4o-mini",
         Gpt5  => "gpt-5",
         Gpt5Mini => "gpt-5-mini",
         Gpt5Nano => "gpt-5-nano",
@@ -118,6 +118,7 @@ pub struct QuestionParams {
     model: Model,
     instructions: Option<String>,
     max_output_tokens: Option<i32>,
+    temperature: Option<f32>,
 }
 
 impl QuestionParams {
@@ -127,6 +128,7 @@ impl QuestionParams {
             model: Model::Gpt5Nano,
             instructions: None,
             max_output_tokens: None,
+            temperature: None,
         }
     }
 
@@ -146,6 +148,11 @@ impl QuestionParams {
     pub fn set_max_output_tokens(&mut self, max_output_tokens: i32) {
         self.max_output_tokens = Some(max_output_tokens);
     }
+
+    #[allow(dead_code)]
+    pub fn set_temperature(&mut self, temperature: f32) {
+        self.temperature = Some(temperature);
+    }
 }
 
 #[derive(Serialize)]
@@ -155,7 +162,8 @@ struct RequestBody<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     instructions: Option<&'a str>,
     text: serde_json::Value,
-    max_output_tokens: Option<i32>
+    max_output_tokens: Option<i32>,
+    temperature: Option<f32>,
 }
 
 
@@ -201,6 +209,7 @@ struct RequestBody<'a> {
         let body = RequestBody {
             model: params.model.to_string(),
             input: question,
+            temperature: params.temperature,
             instructions: params.instructions.as_deref(),
             max_output_tokens: params.max_output_tokens,
             text: json!({ "verbosity": params.verbosity.to_string() }),

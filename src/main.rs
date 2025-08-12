@@ -5,7 +5,7 @@ mod server;
 mod gpt;
 
 
-use anyhow::{Context, Result};
+use anyhow::{Result};
 use crate::server::run_server;
 use crate::gpt::*;
 
@@ -34,6 +34,7 @@ async fn main() -> Result<()> {
     cli.read_gpt_key_from_file(None)?;
 
     let mut params = gpt::QuestionParams::default();
+    //params.set_temperature(1.5);
     params.set_instructions("Short minimalistic answer to the question. 1–2 words unless the correct name naturally requires more. No punctuation, no extra explanation.");
     let answer = cli.ask("Name a random well known actor.", &params).await?;
     let res = answer.to_string().unwrap_or(String::new());
