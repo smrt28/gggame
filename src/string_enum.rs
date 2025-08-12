@@ -1,3 +1,5 @@
+
+#[macro_export]
 macro_rules! string_enum {
     (
         $(#[$meta:meta])*
