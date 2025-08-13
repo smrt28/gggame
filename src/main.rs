@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 
 #[macro_use]
 
@@ -29,7 +30,7 @@ async fn main() -> Result<()> {
     answer.dump();
 
  */
-
+/*
     let mut cli = GptClient::new();
     cli.read_gpt_key_from_file(None)?;
 
@@ -39,8 +40,8 @@ async fn main() -> Result<()> {
     let answer = cli.ask("Name a random well known actor.", &params).await?;
     let res = answer.to_string().unwrap_or(String::new());
     println!("{}", res);
-
-   // run_server().await?;
+*/
+    run_server().await?;
 
     Ok(())
 }
