@@ -1,7 +1,6 @@
 
 #![allow(dead_code)]
 
-
 use axum::{extract::ConnectInfo, routing::get, Router, extract::State};
 use anyhow::{Context, Error, Result};
 use std::net::SocketAddr;
@@ -10,90 +9,25 @@ use axum::response::Html;
 use tokio::{net::TcpListener, sync::Mutex};
 use std::sync::Mutex as StdMutex;
 
+use crate::server::client_pool::*;
 use crate::gpt::*;
+use crate::GptClientFactory;
 
-#[derive(Default)]
 struct AppState {
-    counter: Mutex<u32>,
+    counter: Mutex<u32>, // or AtomicU32 if it’s just a counter
+    client_factory: Arc<dyn PollableClientFactory<GptClient> + Send + Sync>,
 }
-
-
-trait PollableClientFactory<Client> : Send + Sync {
-    fn build_client(&self) -> Client;
-}
-
-struct ClientsPool<Client> {
-    clients: StdMutex<Vec<Box<Client>>>,
-    factory: Box<dyn PollableClientFactory<Client> + Send + Sync>,
-}
-
-struct ClientGuard<Client> {
-    client: Option<Box<Client>>,
-    pool: Arc<ClientsPool<Client>>,
-}
-
-impl<Client> Drop for ClientGuard<Client>
-{
-    fn drop(&mut self) {
-        if let Some(client) = self.client.take() {
-            self.pool.return_client(client);
-        }
-    }
-}
-
-impl<Client> ClientsPool<Client> {
-    fn new(factory: Box<dyn PollableClientFactory<Client>>) -> Self {
-        Self {
-            clients: StdMutex::new(Vec::new()),
-            factory: factory
-        }
-    }
-
-    fn pop_client(self: &Arc<Self>) -> ClientGuard<Client> {
-        let mut clients = self.clients.lock().unwrap();
-        if clients.len() == 0 {
-            return ClientGuard {
-                client: Some(Box::new(self.factory.build_client())),
-                pool: Arc::clone(self)
-            };
-        }
-
-        let client = clients.pop().unwrap();
-        ClientGuard { client: Some(client), pool: Arc::clone(self) }
-    }
-
-    fn return_client(&self, client: Box<Client>) {
-        if let Ok(mut clients) = self.clients.lock() {
-            clients.push(client);
-        }
-    }
-}
-
-
-
-
 impl AppState {
-    /*
-    async fn get_gpt_client(&mut self) -> Result<GptClient> {
-        {
-            let mut clients = self.gpt_clients.lock().await;
-            if (*clients).len() > 0 {
-                return (*clients).pop().ok_or(Error::msg("no gpt client available"));
-            }
-        }
-
-        let mut client = GptClient::new();
-        client.read_gpt_key_from_file(None)?;
-        Ok(client)
+    fn new(factory: Arc<dyn PollableClientFactory<GptClient> + Send + Sync>) -> Self {
+        Self { counter: Mutex::new(0), client_factory: factory }
     }
-    */
-
 }
 
 type Shared = Arc<AppState>;
 
-pub async fn run_server() -> anyhow::Result<()> {
-    let state = Shared::new(AppState::default());
+pub async fn run_server(
+    factory: Arc<dyn PollableClientFactory<GptClient> + Send + Sync>,) -> anyhow::Result<()> {
+    let state = Shared::new(AppState::new(factory));
 
     let app = Router::new()
         .route("/", get(index))
@@ -124,6 +58,9 @@ async fn index(
     State(state): State<Shared>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Html<String> {
 
+
+    let client = state.client_factory.build_client();
+
     let counter_value = {
         let mut counter = state.counter.lock().await;
         *counter +=1;
@@ -140,8 +77,8 @@ async fn index(
     Html(html)
 }
 
-async fn ask(State(state): State<Shared>,
-             ConnectInfo(addr): ConnectInfo<SocketAddr>) -> String
+async fn ask(State(_state): State<Shared>,
+             ConnectInfo(_addr): ConnectInfo<SocketAddr>) -> String
 {
     let r: anyhow::Result<String> = async {
         let mut cli = GptClient::new();
