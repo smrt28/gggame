@@ -13,7 +13,6 @@ fn generate(len: usize) -> String {
 
 #[derive(Default)]
 pub struct AnswerCache {
-    tokens: VecDeque<String>,
     map: LinkedHashMap<String, Option<String>>,
     limit: usize,
 }
@@ -30,15 +29,6 @@ impl AnswerCache {
         res.limit = 2048;
         res
     }
-
-    fn sanitize(&mut self) {
-        while self.tokens.len() > self.limit {
-            if let Some(first) = self.tokens.pop_front() {
-                self.map.remove(&first);
-            }
-        }
-    }
-
 
     pub fn reserve_token(&mut self) -> String {
         let token = Self::generate_token();

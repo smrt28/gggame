@@ -16,9 +16,7 @@ use crate::gpt::gpt::GptClient;
 mod macros;
 
 
-struct GptClientFactory {
-
-}
+struct GptClientFactory {}
 
 impl PollableClientFactory::<GptClient> for GptClientFactory {
     fn build_client(&self) -> GptClient {
@@ -27,7 +25,6 @@ impl PollableClientFactory::<GptClient> for GptClientFactory {
         cli
     }
 }
-
 
 #[tokio::main]
 async fn main() -> Result<()> {

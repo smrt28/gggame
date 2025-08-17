@@ -82,8 +82,8 @@ async fn answer(
                     "answer": text,
                     "status": "ok"
                 }).to_string(),
-                AnswerCacheEntry::None => Er::status("invalid_token"),
-                AnswerCacheEntry::Pending => Er::status("pending"),
+                AnswerCacheEntry::None => ErStatus::InvalidToken{}.json(),
+                AnswerCacheEntry::Pending => ErStatus::Pending{}.json(),
             }
         }
         Err(_poisoned) => return "error".to_owned(),
@@ -96,7 +96,7 @@ async fn ask(
 ) -> String {
     let token = match state.answer_cache.lock() {
         Ok(mut cache) => cache.reserve_token(),
-        Err(_poisoned) => Er::error("internal server error")
+        Err(_poisoned) => ErStatus::error("internal server error").json()
     };
 
     let state2 = state.clone();
@@ -111,7 +111,7 @@ async fn ask(
 
         let result = match client.ask("Name a random well known actor.", &params).await {
             Ok(answer) => answer.to_string().unwrap_or_default(),
-            Err(_) => Er::error("internal server error")
+            Err(_) => ErStatus::error("internal server error").json()
         };
 
         let mut cache = state2.answer_cache.lock().unwrap();
