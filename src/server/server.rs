@@ -1,25 +1,42 @@
 
 #![allow(dead_code)]
 
-use axum::{extract::ConnectInfo, routing::get, Router, extract::State};
+use axum::{
+    extract::ConnectInfo,
+    routing::get,
+    Router,
+    extract::State,
+    extract::Path,
+};
+
+
 use anyhow::{Context, Error, Result};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use axum::response::Html;
 use tokio::{net::TcpListener, sync::Mutex};
 use std::sync::Mutex as StdMutex;
-
+use clap::builder::Str;
+use crate::{gpt, GptClientFactory};
 use crate::server::client_pool::*;
-use crate::gpt::*;
-use crate::GptClientFactory;
+use crate::server::answer_cache::*;
+
+use crate::gpt::gpt::*;
+
+
 
 struct AppState {
     counter: Mutex<u32>, // or AtomicU32 if it’s just a counter
-    client_factory: Arc<dyn PollableClientFactory<GptClient> + Send + Sync>,
+    client_factory: Arc<ClientsPool::<GptClient>>,
+    answer_cache: StdMutex<AnswerCache>,
 }
 impl AppState {
     fn new(factory: Arc<dyn PollableClientFactory<GptClient> + Send + Sync>) -> Self {
-        Self { counter: Mutex::new(0), client_factory: factory }
+        Self {
+            counter: Mutex::new(0),
+            client_factory: Arc::new(ClientsPool::<GptClient>::new(factory)),
+            answer_cache: Mutex::new(AnswerCache::new()),
+        }
     }
 }
 
@@ -33,10 +50,9 @@ pub async fn run_server(
         .route("/", get(index))
         .route("/gggame", get(gggame))
         .route("/ask", get(ask))
+        .route("/answer/{token}", get(answer))
         .with_state(state)
         ;
-
-    //app.route("/gggame", get(gggame));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     let listener = TcpListener::bind(addr).await?;
@@ -46,7 +62,6 @@ pub async fn run_server(
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await?;
-
     Ok(())
 }
 
@@ -54,48 +69,43 @@ async fn gggame(ConnectInfo(_addr): ConnectInfo<SocketAddr>) -> String {
     format!("this is a gggame")
 }
 
-async fn index(
-    State(state): State<Shared>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Html<String> {
 
-
-    let client = state.client_factory.build_client();
-
-    let counter_value = {
-        let mut counter = state.counter.lock().await;
-        *counter +=1;
-        *counter
-    };
-
-
-    let html = format!(
-        "<h1>Your ip address is: \"{addr} counter={}\"</h1>\n",
-        counter_value
-    );
-
-    // create `Html` type like this
-    Html(html)
+async fn answer(
+    State(_state): State<Shared>,
+    ConnectInfo(_addr): ConnectInfo<SocketAddr>,
+    Path(_token): Path<String>,
+) -> String {
+    "".to_string()
 }
 
-async fn ask(State(_state): State<Shared>,
+async fn ask(
+    State(state): State<Shared>,
+    ConnectInfo(_addr): ConnectInfo<SocketAddr>,
+) -> String {
+
+    let client_wrap = state.client_factory.pop_client();
+    let client = client_wrap.client();
+
+    let cache = state.answer_cache.lock();
+    if cache.is_err() {
+        return "error".to_owned();
+    }
+    let token = cache.unwrap().reserve_token();
+
+    let mut params = QuestionParams::default();
+    params.set_instructions("Short minimalistic answer to the question. 1–2 words unless the correct name naturally requires more. No punctuation, no extra explanation.");
+
+    let the_answer = match client.ask("Name a random well known actor.", &params).await {
+        Ok(answer) => answer.to_string().unwrap_or_default(), // or just .to_string() if it returns String
+        Err(_e) => "error".to_owned(),
+    };
+
+    format!("{}", the_answer)
+}
+
+async fn index(State(_state): State<Shared>,
              ConnectInfo(_addr): ConnectInfo<SocketAddr>) -> String
 {
-    let r: anyhow::Result<String> = async {
-        let mut cli = GptClient::new();
-        cli.read_gpt_key_from_file(None)?; // OK: block returns Result
-
-        let mut params = QuestionParams::default();
-        params.set_instructions(
-            "Short minimalistic answer to the question. 1–2 words unless the correct name naturally requires more. No punctuation, no extra explanation."
-        );
-
-        let answer = cli.ask("Name a random well known actor.", &params).await?; // OK
-        Ok(answer.to_string().unwrap_or_default()) // <-- return Result; no semicolon
-    }.await;
-
-    if let Ok(r) = r {
-        return r;
-    }
-
-    "error".to_string()
+    AnswerCache::generate_token()
+    //"index".to_string()
 }

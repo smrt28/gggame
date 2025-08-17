@@ -13,9 +13,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
-
-
-
 string_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum Model {
@@ -96,8 +93,6 @@ impl Answer {
         }
     }
 }
-
-
 
 pub struct GptClient {
     client: reqwest::Client,

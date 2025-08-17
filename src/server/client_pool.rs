@@ -2,21 +2,31 @@
 
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-
-
+use crate::gpt::gpt::GptClient;
 
 pub trait PollableClientFactory<Client> : Send + Sync {
     fn build_client(&self) -> Client;
 }
 
+pub type Factory<Client> =
+    Arc<dyn PollableClientFactory<Client> + Send + Sync>;
+
+
 pub struct ClientsPool<Client> {
     clients: StdMutex<Vec<Box<Client>>>,
-    factory: Box<dyn PollableClientFactory<Client> + Send + Sync>,
+    factory: Arc<dyn PollableClientFactory<Client> + Send + Sync>,
 }
 
 pub struct ClientGuard<Client> {
     client: Option<Box<Client>>,
     pool: Arc<ClientsPool<Client>>,
+}
+
+
+impl<Client> ClientGuard<Client> {
+    pub fn client(&self) -> &Client {
+        self.client.as_ref().unwrap().as_ref()
+    }
 }
 
 impl<Client> Drop for ClientGuard<Client>
@@ -29,7 +39,7 @@ impl<Client> Drop for ClientGuard<Client>
 }
 
 impl<Client> ClientsPool<Client> {
-    pub fn new(factory: Box<dyn PollableClientFactory<Client>>) -> Self {
+    pub fn new(factory: Arc<dyn PollableClientFactory<Client> + Send + Sync>) -> Self {
         Self {
             clients: StdMutex::new(Vec::new()),
             factory: factory
