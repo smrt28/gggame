@@ -8,22 +8,26 @@ use axum::{
     extract::State,
     extract::Path,
 };
-
-
 use anyhow::{Context, Error, Result};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use axum::response::Html;
 use tokio::{net::TcpListener, sync::Mutex};
 use std::sync::Mutex as StdMutex;
+use std::time::Duration;
+use axum::extract::Query;
 use clap::builder::Str;
+use serde::Deserialize;
 use serde_json::json;
 use crate::{gpt, GptClientFactory};
 use crate::server::client_pool::*;
 use crate::server::answer_cache::*;
 use crate::gpt::gpt::*;
 use crate::server::error::*;
+use tokio::time::timeout;
 
+#[derive(Deserialize)]
+struct WaitParam { wait: Option<u64> }
 
 struct AppState {
     counter: Mutex<u32>,
@@ -74,19 +78,44 @@ async fn answer(
     State(state): State<Shared>,
     ConnectInfo(_addr): ConnectInfo<SocketAddr>,
     Path(token): Path<String>,
+    Query(query): Query<WaitParam>,
 ) -> String {
-    match state.answer_cache.lock() {
-        Ok(cache) => {
-            match cache.get(&token) {
-                AnswerCacheEntry::Text(text) => json!({
-                    "answer": text,
-                    "status": "ok"
-                }).to_string(),
-                AnswerCacheEntry::None => ErStatus::InvalidToken{}.json(),
-                AnswerCacheEntry::Pending => ErStatus::Pending{}.json(),
+    let wait = query.wait.unwrap_or(0);
+    println!("wait: {}", wait);
+
+    let snap = {
+        let cache = state.answer_cache.lock().unwrap_or_else(|e| e.into_inner());
+        match cache.get(&token) {
+            AnswerCacheEntry::Text(text) => {
+                return json!({ "status": "ok", "answer": text }).to_string();
             }
+            AnswerCacheEntry::None => {
+                return ErStatus::InvalidToken.json();
+            }
+            AnswerCacheEntry::Pending => cache.snapshot(&token), // Option<Slot>
         }
-        Err(_poisoned) => return "error".to_owned(),
+    };
+
+    let Some(slot) = snap else {
+        return ErStatus::InvalidToken.json();
+    };
+
+    let wait_secs = 3;
+    if wait_secs > 0 {
+        let _ = timeout(Duration::from_secs(wait_secs), slot.notify.notified()).await;
+    } else {
+        return ErStatus::Pending.json();
+    }
+
+    let entry_after = {
+        let cache = state.answer_cache.lock().unwrap_or_else(|e| e.into_inner());
+        cache.get(&token)
+    };
+
+    match entry_after {
+        AnswerCacheEntry::Text(text) => json!({ "status": "ok", "answer": text }).to_string(),
+        AnswerCacheEntry::None       => ErStatus::InvalidToken.json(),
+        AnswerCacheEntry::Pending    => ErStatus::Pending.json(),
     }
 }
 
