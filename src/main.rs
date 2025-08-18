@@ -50,14 +50,12 @@ fn www_root() -> PathBuf {
     {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("www")
     }
-
     #[cfg(not(debug_assertions))]
     {
         PathBuf::from(std::env::var("WWW_ROOT")
             .expect("WWW_ROOT env var must be set in release builds"))
     }
 }
-
 
 #[tokio::main]
 async fn main() -> Result<()> {
