@@ -72,3 +72,5 @@ async fn main() -> Result<()> {
     run_server(&config, Arc::new(GptClientFactory::new())).await?;
     Ok(())
 }
+
+//  cargo build --release --target x86_64-unknown-linux-musl
