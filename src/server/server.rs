@@ -10,6 +10,7 @@ use axum::{
 };
 use anyhow::{Context, Error, Result};
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use axum::response::{Html, IntoResponse};
 use tokio::{net::TcpListener, sync::Mutex};
@@ -40,7 +41,7 @@ struct AppState {
 
 #[derive(Default, Clone)]
 pub struct Config {
-    pub www_root_path: Option<String>,
+    pub www_root_path: Option<PathBuf>,
     pub port: u16,
 }
 

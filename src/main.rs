@@ -5,6 +5,7 @@
 mod server;
 mod gpt;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use anyhow::{Result};
 
@@ -25,11 +26,9 @@ impl GptClientFactory {
         let mut res = Self {
             config: ClientFactoryConfig::default()
         };
-
         res.config.max_clients = 5;
         res
     }
-
 }
 
 
@@ -45,11 +44,25 @@ impl PollableClientFactory::<GptClient> for GptClientFactory {
     }
 }
 
+fn www_root() -> PathBuf {
+    #[cfg(debug_assertions)]
+    {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("www")
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        PathBuf::from(std::env::var("WWW_ROOT")
+            .expect("WWW_ROOT env var must be set in release builds"))
+    }
+}
+
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut config = Config::default();
+   let mut config = Config::default();
     config.port = 3000;
-    config.www_root_path = Some("/home/smrt/w/gggame/www".to_string());
+    config.www_root_path = Some(www_root());
     run_server(&config, Arc::new(GptClientFactory::new())).await?;
     Ok(())
 }
