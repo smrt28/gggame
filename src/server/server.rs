@@ -35,6 +35,12 @@ struct AppState {
     answer_cache: StdMutex<AnswerCache>,
 }
 
+#[derive(Default)]
+pub struct Config {
+    pub port: u16,
+}
+
+
 impl AppState {
     fn new(factory: Arc<dyn PollableClientFactory<GptClient> + Send + Sync>) -> Self {
         Self {
@@ -48,6 +54,7 @@ impl AppState {
 type Shared = Arc<AppState>;
 
 pub async fn run_server(
+    config: &Config,
     factory: Arc<dyn PollableClientFactory<GptClient> + Send + Sync>,) -> anyhow::Result<()> {
     let state = Shared::new(AppState::new(factory));
 
@@ -59,7 +66,7 @@ pub async fn run_server(
         .with_state(state)
         ;
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
     let listener = TcpListener::bind(addr).await?;
 
     axum::serve(
@@ -130,10 +137,13 @@ async fn ask(
 
     let state2 = state.clone();
     let token_clone = token.clone();
+    let wrap = state2.client_factory.pop();
+    if !wrap.has_client() {
+        return ErStatus::Overloaded.json();
+    }
 
     tokio::spawn(async move {
-                let client_wrap = state2.client_factory.pop_client();
-        let client = client_wrap.client();
+        let client = wrap.client();
 
         let mut params = QuestionParams::default();
         params.set_instructions("Short minimalistic answer");

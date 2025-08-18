@@ -20,7 +20,8 @@ impl Er{
 pub enum ErStatus {
     Pending,
     Error(String),
-    InvalidToken
+    InvalidToken,
+    Overloaded,
 }
 
 impl ErStatus {
@@ -28,7 +29,8 @@ impl ErStatus {
         match self {
             ErStatus::Pending => Er::status("pending"),
             ErStatus::InvalidToken => Er::status("invalid_token"),
-            ErStatus::Error(text) => Er::error(text.as_str())
+            ErStatus::Error(text) => Er::error(text.as_str()),
+            ErStatus::Overloaded => Er::status("overloaded")
         }
     }
 

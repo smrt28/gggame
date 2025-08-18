@@ -1,5 +1,4 @@
 use rand::Rng;
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::iter;
 use std::sync::Arc;
@@ -14,20 +13,26 @@ fn generate(len: usize) -> String {
 }
 
 #[derive(Clone)]
+pub enum SlotState {
+    Pending,
+    Content(String),
+}
+
+
+#[derive(Clone)]
 pub struct Slot {
-    value: Option<String>,
     pub(crate) notify: Arc<Notify>,
+    state: SlotState,
 }
 
 impl Slot {
     fn new() -> Self {
         Self {
-            value: None,
             notify: Arc::new(Notify::new()),
+            state: SlotState::Pending,
         }
     }
 }
-
 
 #[derive(Default)]
 pub struct AnswerCache {
@@ -61,7 +66,7 @@ impl AnswerCache {
 
     pub fn insert(&mut self, token: &str, text: &str) -> bool {
         if let Some(slot) = self.map.get_mut(token) {
-            slot.value = Some(text.to_owned());
+            slot.state = SlotState::Content(text.to_owned());
             return true;
         }
         false
@@ -70,9 +75,9 @@ impl AnswerCache {
     pub fn get(&self, token: &str) -> AnswerCacheEntry {
         match self.map.get(token) {
             Some(slot) => {
-                match &slot.value {
-                    Some(text) => AnswerCacheEntry::Text(text.to_string()),
-                    None => AnswerCacheEntry::Pending,
+                match &slot.state {
+                    SlotState::Content(text) => AnswerCacheEntry::Text(text.to_string()),
+                    SlotState::Pending => AnswerCacheEntry::Pending,
                 }
             }
             None => AnswerCacheEntry::None,
