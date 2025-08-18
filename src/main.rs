@@ -49,6 +49,7 @@ impl PollableClientFactory::<GptClient> for GptClientFactory {
 async fn main() -> Result<()> {
     let mut config = Config::default();
     config.port = 3000;
+    config.www_root_path = Some("/home/smrt/w/gggame/www".to_string());
     run_server(&config, Arc::new(GptClientFactory::new())).await?;
     Ok(())
 }

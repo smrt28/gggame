@@ -11,11 +11,12 @@ use axum::{
 use anyhow::{Context, Error, Result};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use axum::response::Html;
+use axum::response::{Html, IntoResponse};
 use tokio::{net::TcpListener, sync::Mutex};
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 use axum::extract::Query;
+use axum::http::StatusCode;
 use clap::builder::Str;
 use serde::Deserialize;
 use serde_json::json;
@@ -25,7 +26,8 @@ use crate::server::answer_cache::*;
 use crate::gpt::gpt::*;
 use crate::server::error::*;
 use tokio::time::timeout;
-
+use tower_http::services::ServeDir;
+//use self::fs::{ServeDir, ServeFile};
 #[derive(Deserialize)]
 struct WaitParam { wait: Option<u64> }
 
@@ -33,38 +35,57 @@ struct AppState {
     counter: Mutex<u32>,
     client_factory: Arc<ClientsPool::<GptClient>>,
     answer_cache: StdMutex<AnswerCache>,
+    config: Config,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Config {
+    pub www_root_path: Option<String>,
     pub port: u16,
 }
 
-
 impl AppState {
-    fn new(factory: Arc<dyn PollableClientFactory<GptClient> + Send + Sync>) -> Self {
+    fn new(factory: Arc<dyn PollableClientFactory<GptClient> + Send + Sync>, config: &Config) -> Self {
         Self {
             counter: Mutex::new(0),
             client_factory: Arc::new(ClientsPool::<GptClient>::new(factory)),
             answer_cache: StdMutex::new(AnswerCache::new()),
+            config: config.clone()
         }
     }
 }
 
 type Shared = Arc<AppState>;
 
+
+
 pub async fn run_server(
     config: &Config,
     factory: Arc<dyn PollableClientFactory<GptClient> + Send + Sync>,) -> anyhow::Result<()> {
-    let state = Shared::new(AppState::new(factory));
+    let state = Shared::new(AppState::new(factory, config));
 
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/", get(index))
-        .route("/gggame", get(gggame))
         .route("/ask", get(ask))
         .route("/answer/{token}", get(answer))
-        .with_state(state)
+        .fallback(get(handler_404))
         ;
+
+    if let Some(root) = &config.www_root_path {
+        app = app.nest_service(
+            "/static",
+            ServeDir::new(root)
+                .append_index_html_on_directories(true)
+                .precompressed_br()
+                .precompressed_gzip()
+                .fallback(get(handler_404)),
+
+        );
+    }
+
+    let app = app
+        .fallback(handler_404)
+        .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
     let listener = TcpListener::bind(addr).await?;
@@ -77,8 +98,8 @@ pub async fn run_server(
     Ok(())
 }
 
-async fn gggame(ConnectInfo(_addr): ConnectInfo<SocketAddr>) -> String {
-    format!("this is a gggame")
+async fn handler_404() -> impl IntoResponse {
+    (StatusCode::NOT_FOUND, "Not found")
 }
 
 async fn answer(
