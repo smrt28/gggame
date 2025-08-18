@@ -17,6 +17,7 @@ use tokio::{net::TcpListener, sync::Mutex};
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 use axum::extract::Query;
+use axum::handler::Handler;
 use axum::http::StatusCode;
 use clap::builder::Str;
 use serde::Deserialize;
@@ -28,7 +29,12 @@ use crate::gpt::gpt::*;
 use crate::server::error::*;
 use tokio::time::timeout;
 use tower_http::services::ServeDir;
-//use self::fs::{ServeDir, ServeFile};
+use tower_http::trace::{TraceLayer, DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, DefaultOnFailure};
+use tracing::Level;
+use tracing_subscriber::fmt::layer;
+use tower_http::classify::{ServerErrorsAsFailures, SharedClassifier};
+use tower::{ServiceBuilder};
+
 #[derive(Deserialize)]
 struct WaitParam { wait: Option<u64> }
 
@@ -59,11 +65,19 @@ impl AppState {
 type Shared = Arc<AppState>;
 
 
+fn logging() -> TraceLayer<SharedClassifier<ServerErrorsAsFailures>> {
+    TraceLayer::new_for_http()
+        .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+        .on_request(DefaultOnRequest::new().level(Level::INFO))
+        .on_response(DefaultOnResponse::new().level(Level::INFO))
+        .on_failure(DefaultOnFailure::new().level(Level::ERROR))
+}
 
 pub async fn run_server(
     config: &Config,
     factory: Arc<dyn PollableClientFactory<GptClient> + Send + Sync>,) -> anyhow::Result<()> {
     let state = Shared::new(AppState::new(factory, config));
+    tracing::info!("starting server on port {}", config.port);
 
     let mut app = Router::new()
         .route("/", get(index))
@@ -73,20 +87,23 @@ pub async fn run_server(
         ;
 
     if let Some(root) = &config.www_root_path {
-        app = app.nest_service(
-            "/static",
-            ServeDir::new(root)
-                .append_index_html_on_directories(true)
-                .precompressed_br()
-                .precompressed_gzip()
-                .fallback(get(handler_404)),
-
-        );
+        let static_svc = ServiceBuilder::new()
+            .layer(logging())
+            .service(
+                ServeDir::new(root)
+                    .append_index_html_on_directories(true)
+                    .precompressed_br()
+                    .precompressed_gzip(),
+            );
+        app = app.nest_service("/static", static_svc);
     }
+
+    app = app.layer(logging());
 
     let app = app
         .fallback(handler_404)
-        .with_state(state);
+        .with_state(state)
+        .layer(logging());
 
     let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
     let listener = TcpListener::bind(addr).await?;
@@ -165,6 +182,7 @@ async fn ask(
     }
 
     tokio::spawn(async move {
+        tracing::info!("token registered {}", token_clone);
         let client = wrap.client();
 
         let mut params = QuestionParams::default();

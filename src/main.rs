@@ -13,6 +13,7 @@ use crate::server::server::run_server;
 use crate::server::server::Config;
 use crate::server::client_pool::*;
 use crate::gpt::gpt::GptClient;
+use tracing_subscriber::EnvFilter;
 
 #[macro_use]
 mod macros;
@@ -60,6 +61,13 @@ fn www_root() -> PathBuf {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info".into())
+        )
+        .init();
+
    let mut config = Config::default();
     config.port = 3000;
     config.www_root_path = Some(www_root());
