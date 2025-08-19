@@ -80,9 +80,9 @@ pub async fn run_server(
     tracing::info!("starting server on port {}", config.port);
 
     let mut app = Router::new()
-        .route("/", get(index))
-        .route("/ask", get(ask))
-        .route("/answer/{token}", get(answer))
+        .route("/api/token", get(index))
+        .route("/api/ask", get(ask))
+        .route("/api/answer/{token}", get(answer))
         .fallback(get(handler_404))
         ;
 
