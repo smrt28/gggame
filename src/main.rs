@@ -17,6 +17,7 @@ use tracing_subscriber::EnvFilter;
 
 #[macro_use]
 mod macros;
+mod utinls;
 
 struct GptClientFactory {
     config: ClientFactoryConfig,

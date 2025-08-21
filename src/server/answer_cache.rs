@@ -1,16 +1,12 @@
+
 use rand::Rng;
 use std::collections::VecDeque;
 use std::iter;
 use std::sync::Arc;
 use linked_hash_map::LinkedHashMap;
 use tokio::sync::Notify;
-
-fn generate(len: usize) -> String {
-    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
-    let mut rng = rand::rng();
-    let one_char = || CHARSET[rng.random_range(0..CHARSET.len())] as char;
-    iter::repeat_with(one_char).take(len).collect()
-}
+use crate::utinls::*;
+use crate::utinls::token_generator::TokenType;
 
 #[derive(Clone)]
 pub enum SlotState {
@@ -89,6 +85,6 @@ impl AnswerCache {
     }
 
     pub fn generate_token() -> String {
-        format!("t_{}", generate(32))
+         token_generator::generate_token(TokenType::Answer)
     }
 }
