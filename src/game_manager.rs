@@ -1,9 +1,15 @@
 #![allow(dead_code)]
 
+use crate::token::*;
 use dashmap::DashMap;
 
 enum Verdict {
     Yes, No, Unable
+}
+
+
+struct Question {
+    text: String,
 }
 
 struct Answer {
@@ -39,3 +45,15 @@ impl Record {
         self.answers = Some(Answer{ verdict, comment});
     }
 }
+
+
+impl GameManager {
+    pub fn new() -> Self {
+        GameManager {
+            game_states: DashMap::new(),
+        }
+    }
+    
+    
+}
+

@@ -19,6 +19,8 @@ use std::time::Duration;
 use axum::extract::Query;
 use axum::handler::Handler;
 use axum::http::StatusCode;
+use axum::body::Bytes;
+use axum::routing::post;
 use clap::builder::Str;
 use serde::Deserialize;
 use serde_json::json;
@@ -30,10 +32,11 @@ use crate::server::error::*;
 use tokio::time::timeout;
 use tower_http::services::ServeDir;
 use tower_http::trace::{TraceLayer, DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, DefaultOnFailure};
-use tracing::Level;
+use tracing::{info, Level};
 use tracing_subscriber::fmt::layer;
 use tower_http::classify::{ServerErrorsAsFailures, SharedClassifier};
 use tower::{ServiceBuilder};
+use crate::token::*;
 
 #[derive(Deserialize)]
 struct WaitParam { wait: Option<u64> }
@@ -82,6 +85,7 @@ pub async fn run_server(
     let mut app = Router::new()
         .route("/api/token", get(index))
         .route("/api/ask", get(ask))
+        .route("/api/dry_ask", post(dry_ask))
         .route("/api/answer/{token}", get(answer))
         .fallback(get(handler_404))
         ;
@@ -124,11 +128,9 @@ async fn answer(
     State(state): State<Shared>,
     ConnectInfo(_addr): ConnectInfo<SocketAddr>,
     Path(token): Path<String>,
-    Query(query): Query<WaitParam>,
+    Query(_query): Query<WaitParam>,
 ) -> String {
-    let wait = query.wait.unwrap_or(0);
-    println!("wait: {}", wait);
-
+    //let wait = query.wait.unwrap_or(0);
     let snap = {
         let cache = state.answer_cache.lock().unwrap_or_else(|e| e.into_inner());
         match cache.get(&token) {
@@ -200,7 +202,15 @@ async fn ask(
     json!({"token": token.to_owned(), "status": "ok"}).to_string()
 }
 
+
+async fn dry_ask(body: Bytes) -> String {
+    let content = String::from_utf8_lossy(&body);
+    info!("{}", content);
+    "ok".to_string()
+}
+
+
 async fn index(State(_state): State<Shared>,
              ConnectInfo(_addr): ConnectInfo<SocketAddr>) -> String {
-    AnswerCache::generate_token()
+    Token::new(TokenType::Answer).to_string()
 }

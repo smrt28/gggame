@@ -7,7 +7,7 @@ mod gpt;
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use anyhow::{Result};
+use anyhow::Result;
 
 use crate::server::server::run_server;
 use crate::server::server::Config;
@@ -18,6 +18,8 @@ use tracing_subscriber::EnvFilter;
 #[macro_use]
 mod macros;
 mod utinls;
+mod token;
+mod game_manager;
 
 struct GptClientFactory {
     config: ClientFactoryConfig,

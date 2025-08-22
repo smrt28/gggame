@@ -1,1 +1,46 @@
-hi
+
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Send Message</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    textarea { width: 100%; max-width: 40rem; height: 8rem; }
+    button { margin-top: .5rem; }
+    #status { margin-left: .75rem; }
+  </style>
+</head>
+<body>
+  <label for="message">Message</label><br>
+  <textarea id="message"></textarea><br>
+  <button onclick="sendMessage()">Send</button>
+  <span id="status"></span>
+
+  <script>
+    async function sendMessage() {
+      const msg = document.getElementById('message').value.trim();
+      const statusEl = document.getElementById('status');
+      if (!msg) return;
+
+      statusEl.textContent = 'Sending…';
+      try {
+        const resp = await fetch('http://localhost:3000/api/dry_ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              question: msg
+          })
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        statusEl.textContent = 'Sent ✅';
+        document.getElementById('message').value = '';
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Failed ❌';
+      }
+    }
+  </script>
+</body>
+</html>

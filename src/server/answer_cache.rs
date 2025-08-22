@@ -6,7 +6,7 @@ use std::sync::Arc;
 use linked_hash_map::LinkedHashMap;
 use tokio::sync::Notify;
 use crate::utinls::*;
-use crate::utinls::token_generator::TokenType;
+
 
 #[derive(Clone)]
 pub enum SlotState {
@@ -85,6 +85,6 @@ impl AnswerCache {
     }
 
     pub fn generate_token() -> String {
-         token_generator::generate_token(TokenType::Answer)
+         token_generator::generate_token()
     }
 }
