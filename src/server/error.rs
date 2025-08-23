@@ -38,3 +38,15 @@ impl ErStatus {
         }
     }
 }
+
+
+
+#[derive(Debug, thiserror::Error)]
+pub enum AppError {
+    #[error("invalid token")]
+    InvalidToken,
+    #[error("game not found")]
+    GameNotFound,
+    #[error(transparent)]
+    Any(#[from] anyhow::Error),
+}

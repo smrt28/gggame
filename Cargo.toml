@@ -19,3 +19,4 @@ tracing = "0.1.41"
 tower = "0.5.2"
 openssl = { version = "0.10", features = ["vendored"] }
 dashmap = "7.0.0-rc2"
+thiserror = "2.0.12"
