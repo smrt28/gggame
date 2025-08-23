@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use serde_json::json;
 
 pub struct Er{}
@@ -19,9 +21,10 @@ impl Er{
 
 pub enum ErStatus {
     Pending,
-    Error(String),
     InvalidToken,
     Overloaded,
+    GameDoesNotExist,
+    InvalidRequest,
 }
 
 impl ErStatus {
@@ -29,12 +32,9 @@ impl ErStatus {
         match self {
             ErStatus::Pending => Er::status("pending"),
             ErStatus::InvalidToken => Er::status("invalid_token"),
-            ErStatus::Error(text) => Er::error(text.as_str()),
-            ErStatus::Overloaded => Er::status("overloaded")
+            ErStatus::Overloaded => Er::status("overloaded"),
+            ErStatus::GameDoesNotExist => Er::status("game_does_not_exist"),
+            ErStatus::InvalidRequest => Er::status("invalid_request"),
         }
-    }
-
-    pub fn error(message: &str) -> ErStatus {
-        ErStatus::Error(message.to_string())
     }
 }

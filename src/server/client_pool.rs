@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-use crate::gpt::gpt::GptClient;
+use crate::gpt::GptClient;
 
 #[derive(Clone, Default)]
 pub struct ClientFactoryConfig {

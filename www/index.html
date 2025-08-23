@@ -16,9 +16,17 @@
   <label for="message">Message</label><br>
   <textarea id="message"></textarea><br>
   <button onclick="sendMessage()">Send</button>
+
   <span id="status"></span>
 
   <script>
+
+
+    async function createGame() {
+
+    }
+
+
     async function sendMessage() {
       const msg = document.getElementById('message').value.trim();
       const statusEl = document.getElementById('status');
@@ -41,6 +49,9 @@
         statusEl.textContent = 'Failed ❌';
       }
     }
+
+
+
   </script>
 </body>
 </html>

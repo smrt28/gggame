@@ -24,10 +24,10 @@ use axum::routing::post;
 use clap::builder::Str;
 use serde::Deserialize;
 use serde_json::json;
-use crate::{gpt, GptClientFactory};
+use crate::{gpt, token, GptClientFactory};
 use crate::server::client_pool::*;
 use crate::server::answer_cache::*;
-use crate::gpt::gpt::*;
+use crate::gpt::*;
 use crate::server::error::*;
 use tokio::time::timeout;
 use tower_http::services::ServeDir;
@@ -37,6 +37,7 @@ use tracing_subscriber::fmt::layer;
 use tower_http::classify::{ServerErrorsAsFailures, SharedClassifier};
 use tower::{ServiceBuilder};
 use crate::token::*;
+use crate::game_manager::*;
 
 #[derive(Deserialize)]
 struct WaitParam { wait: Option<u64> }
@@ -46,6 +47,7 @@ struct AppState {
     client_factory: Arc<ClientsPool::<GptClient>>,
     answer_cache: StdMutex<AnswerCache>,
     config: Config,
+    game_manager: GameManager,
 }
 
 #[derive(Default, Clone)]
@@ -60,7 +62,8 @@ impl AppState {
             counter: Mutex::new(0),
             client_factory: Arc::new(ClientsPool::<GptClient>::new(factory)),
             answer_cache: StdMutex::new(AnswerCache::new()),
-            config: config.clone()
+            config: config.clone(),
+            game_manager: GameManager::new()
         }
     }
 }
@@ -84,8 +87,13 @@ pub async fn run_server(
 
     let mut app = Router::new()
         .route("/api/token", get(index))
-        .route("/api/ask", get(ask))
         .route("/api/dry_ask", post(dry_ask))
+
+        .route("/api/game/new", get(new_game))
+        .route("/api/game/{token}/ask", post(ask))
+        .route("/api/game/{token}", get(game))
+        .route("/api/game/{token}/version", get(game_version))
+
         .route("/api/answer/{token}", get(answer))
         .fallback(get(handler_404))
         ;
@@ -167,10 +175,56 @@ async fn answer(
     }
 }
 
+
+async fn game_version(State(state): State<Shared>,
+                      ConnectInfo(_addr): ConnectInfo<SocketAddr>,
+                      Path(token_str): Path<String>) -> String {
+    let Ok(token) = Token::from_stringr(token_str.as_str()) else {
+        return ErStatus::InvalidToken.json();
+    };
+
+    let Some(g) = state.game_manager.get_game(&token) else {
+        return ErStatus::GameDoesNotExist.json();
+    };
+
+    json!({
+        "version": g.get_version(),
+        "status": "ok"
+    }).to_string()
+}
+
+
 async fn ask(
     State(state): State<Shared>,
     ConnectInfo(_addr): ConnectInfo<SocketAddr>,
+    Path(token_str): Path<String>,
+    body: Bytes
 ) -> String {
+
+    let Ok(token) = Token::from_stringr(token_str.as_str()) else {
+        return ErStatus::InvalidToken.json();
+    };
+
+    let Some(question) = sanitize_question(&String::from_utf8_lossy(&body).to_string()) else {
+        return ErStatus::InvalidRequest.json();
+    };
+
+    let Some(mut g) = state.game_manager.get_game(&token) else {
+        return ErStatus::GameDoesNotExist.json();
+    };
+
+    if !g.set_pending_question(&question) {
+        return ErStatus::Pending.json();
+    }
+
+    json!({
+        "version": g.get_version(),
+        "status": "ok"
+    }).to_string()
+
+
+
+    /*
     let token = match state.answer_cache.lock() {
         Ok(mut cache) => cache.reserve_token(),
         Err(_poisoned) => ErStatus::error("internal server error").json()
@@ -200,6 +254,7 @@ async fn ask(
     });
 
     json!({"token": token.to_owned(), "status": "ok"}).to_string()
+    */
 }
 
 
@@ -213,4 +268,23 @@ async fn dry_ask(body: Bytes) -> String {
 async fn index(State(_state): State<Shared>,
              ConnectInfo(_addr): ConnectInfo<SocketAddr>) -> String {
     Token::new(TokenType::Answer).to_string()
+}
+
+
+async fn new_game(State(state): State<Shared>,
+               ConnectInfo(_addr): ConnectInfo<SocketAddr>) -> String {
+    state.game_manager.new_game().to_string()
+}
+
+async fn game(State(state): State<Shared>, Path(token_str): Path<String>,
+                  ConnectInfo(_addr): ConnectInfo<SocketAddr>) -> String {
+    let Ok(token) = Token::from_stringr(token_str.as_str()) else {
+        return ErStatus::InvalidToken.json();
+    };
+
+    let Some(game) = state.game_manager.get_game(&token) else {
+        return ErStatus::InvalidToken.json();
+    };
+
+    "".to_string()
 }

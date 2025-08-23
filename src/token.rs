@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use rand::Rng;
 use anyhow::{Context, Result};
 
@@ -6,17 +8,20 @@ pub const TOKEN_LENGTH: usize = 20;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TokenType {
     Answer,
+    Game,
 }
 
 impl TokenType {
     fn leading_byte(&self) -> u8 {
         match self {
             TokenType::Answer => 'a' as u8,
+            TokenType::Game => 'g' as u8,
         }
     }
     fn get_token_type(token: &Token) -> Option<TokenType> {
         match token.token[0] as char {
             'a' => Some(TokenType::Answer),
+            'g' => Some(TokenType::Game),
             _ => None,
         }
     }
@@ -64,5 +69,9 @@ impl Token {
 
     pub fn to_string(&self) -> String {
         String::from_utf8_lossy(&self.token).to_string()
+    }
+
+    pub fn to_str(&self) -> &str {
+        std::str::from_utf8(&self.token).unwrap()
     }
 }

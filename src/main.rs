@@ -12,7 +12,7 @@ use anyhow::Result;
 use crate::server::server::run_server;
 use crate::server::server::Config;
 use crate::server::client_pool::*;
-use crate::gpt::gpt::GptClient;
+use crate::gpt::GptClient;
 use tracing_subscriber::EnvFilter;
 
 #[macro_use]
